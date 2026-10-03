@@ -53,7 +53,7 @@ export default async function DashboardPage() {
         title={greeting}
         description="Here's an overview of your active recruitment pipeline and candidate matches."
         action={
-          <Link href="/jobs">
+          <Link href="/jobs/new">
             <Button variant="primary" size="md" icon={<PlusIcon className="w-4 h-4" />}>
               Create Job
             </Button>
@@ -153,7 +153,7 @@ export default async function DashboardPage() {
                     >
                       <div className="min-w-0 pr-4">
                         <Link
-                          href="/jobs"
+                          href={`/jobs/${job.id}`}
                           className="text-sm font-semibold text-slate-900 hover:text-blue-900 truncate block transition-colors"
                         >
                           {job.title}
@@ -173,7 +173,7 @@ export default async function DashboardPage() {
                           {statusBadge.label}
                         </Badge>
                         <Link
-                          href="/jobs"
+                          href={`/jobs/${job.id}`}
                           className="p-1 text-slate-400 hover:text-slate-700 transition-colors"
                           title="View job"
                           aria-label={`View ${job.title}`}
@@ -192,7 +192,7 @@ export default async function DashboardPage() {
                   title="No jobs yet"
                   description="Create your first job description to start structuring role requirements and matching candidate resumes."
                   action={
-                    <Link href="/jobs">
+                    <Link href="/jobs/new">
                       <Button variant="primary" size="sm" icon={<PlusIcon className="w-3.5 h-3.5" />}>
                         Create Job
                       </Button>
