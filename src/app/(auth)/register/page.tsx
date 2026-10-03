@@ -4,6 +4,9 @@ import React, { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { registerRecruiter, loginRecruiter, type AuthActionResult } from "@/lib/actions/auth-actions";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Alert } from "@/components/ui/alert";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -44,7 +47,7 @@ export default function RegisterPage() {
   return (
     <div>
       <div className="mb-6">
-        <h2 className="text-lg font-semibold text-slate-900 tracking-tight">
+        <h2 className="text-xl font-bold text-slate-900 tracking-tight">
           Create Recruiter Account
         </h2>
         <p className="text-xs text-slate-500 mt-1">
@@ -53,154 +56,71 @@ export default function RegisterPage() {
       </div>
 
       {globalError && (
-        <div
-          role="alert"
-          className="mb-5 p-3 rounded-lg bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in duration-200"
-        >
-          <svg
-            className="w-4 h-4 text-rose-600 shrink-0 mt-0.5"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-            />
-          </svg>
-          <span className="leading-relaxed font-medium">{globalError}</span>
-        </div>
+        <Alert variant="error" className="mb-5">
+          {globalError}
+        </Alert>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4" noValidate>
-        <div>
-          <label
-            htmlFor="name"
-            className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5"
-          >
-            Full Name <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="name"
-            name="name"
-            type="text"
-            autoComplete="name"
-            required
-            disabled={isPending}
-            placeholder="Jane Doe"
-            className={`w-full px-3.5 py-2.5 text-sm bg-white border rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all disabled:opacity-60 disabled:bg-slate-50 ${
-              fieldErrors?.name ? "border-rose-300 bg-rose-50/30" : "border-slate-300"
-            }`}
-          />
-          {fieldErrors?.name && (
-            <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.name}</p>
-          )}
-        </div>
-
-        <div>
-          <label
-            htmlFor="company"
-            className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5"
-          >
-            Company / Organization
-          </label>
-          <input
-            id="company"
-            name="company"
-            type="text"
-            autoComplete="organization"
-            disabled={isPending}
-            placeholder="Acme Corp"
-            className="w-full px-3.5 py-2.5 text-sm bg-white border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all disabled:opacity-60 disabled:bg-slate-50"
-          />
-        </div>
-
-        <div>
-          <label
-            htmlFor="email"
-            className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5"
-          >
-            Work Email <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            disabled={isPending}
-            placeholder="recruiter@company.com"
-            className={`w-full px-3.5 py-2.5 text-sm bg-white border rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all disabled:opacity-60 disabled:bg-slate-50 ${
-              fieldErrors?.email ? "border-rose-300 bg-rose-50/30" : "border-slate-300"
-            }`}
-          />
-          {fieldErrors?.email && (
-            <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.email}</p>
-          )}
-        </div>
-
-        <div>
-          <label
-            htmlFor="password"
-            className="block text-xs font-semibold text-slate-700 tracking-wide uppercase mb-1.5"
-          >
-            Password <span className="text-rose-500">*</span>
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="new-password"
-            required
-            disabled={isPending}
-            placeholder="At least 8 characters (letters & numbers)"
-            className={`w-full px-3.5 py-2.5 text-sm bg-white border rounded-lg text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:border-transparent transition-all disabled:opacity-60 disabled:bg-slate-50 ${
-              fieldErrors?.password ? "border-rose-300 bg-rose-50/30" : "border-slate-300"
-            }`}
-          />
-          {fieldErrors?.password ? (
-            <p className="mt-1 text-xs text-rose-600 font-medium">{fieldErrors.password}</p>
-          ) : (
-            <p className="mt-1 text-[11px] text-slate-400">
-              Must be at least 8 characters with at least one letter and one number.
-            </p>
-          )}
-        </div>
-
-        <button
-          type="submit"
+        <Input
+          id="name"
+          name="name"
+          type="text"
+          label="Full Name"
+          autoComplete="name"
+          required
           disabled={isPending}
-          className="w-full mt-2 flex items-center justify-center py-2.5 px-4 rounded-lg bg-blue-900 text-white text-sm font-medium hover:bg-blue-800 focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2 transition-colors disabled:opacity-60 cursor-pointer disabled:cursor-not-allowed shadow-xs"
-        >
-          {isPending ? (
-            <span className="inline-flex items-center gap-2">
-              <svg
-                className="animate-spin h-4 w-4 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Creating account...
-            </span>
-          ) : (
-            "Create Account"
-          )}
-        </button>
+          placeholder="Jane Doe"
+          error={fieldErrors?.name}
+        />
+
+        <Input
+          id="company"
+          name="company"
+          type="text"
+          label="Company / Organization"
+          autoComplete="organization"
+          disabled={isPending}
+          placeholder="Acme Corp"
+          helperText="Optional: Your recruitment agency or corporate department"
+        />
+
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          label="Work Email"
+          autoComplete="email"
+          required
+          disabled={isPending}
+          placeholder="recruiter@company.com"
+          error={fieldErrors?.email}
+        />
+
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          label="Password"
+          autoComplete="new-password"
+          required
+          disabled={isPending}
+          placeholder="At least 8 characters (letters & numbers)"
+          error={fieldErrors?.password}
+          helperText="Must contain at least 8 characters, with letters and numbers."
+        />
+
+        <div className="pt-2">
+          <Button
+            type="submit"
+            variant="primary"
+            size="md"
+            isLoading={isPending}
+            className="w-full"
+          >
+            Create Recruiter Account
+          </Button>
+        </div>
       </form>
 
       <div className="mt-6 pt-5 border-t border-slate-100 text-center">
