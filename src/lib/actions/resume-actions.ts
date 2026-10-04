@@ -8,7 +8,10 @@ import {
   validateResumeBuffer,
   saveResumeBuffer,
   deleteResumeFile,
+  getResumeFileBuffer,
 } from "@/lib/storage";
+import { extractTextFromBuffer } from "@/lib/text-extraction";
+import { type AllowedExtension } from "@/lib/storage-constants";
 
 export interface FileUploadResult {
   fileName: string;
@@ -16,6 +19,8 @@ export interface FileUploadResult {
   candidateId?: string;
   candidateName?: string;
   resumeId?: string;
+  processingStatus?: string;
+  extractedTextLength?: number;
   error?: string;
 }
 
@@ -24,6 +29,12 @@ export interface UploadBatchResult {
   totalUploaded: number;
   totalFailed: number;
   results: FileUploadResult[];
+  error?: string;
+}
+
+export interface ExtractionActionResult {
+  success: boolean;
+  textLength?: number;
   error?: string;
 }
 
@@ -55,8 +66,158 @@ function deriveProvisionalName(fileName: string): string {
 }
 
 /**
+ * Processes text extraction for a specific resume, updating its database status.
+ * Reusable for both post-upload extraction and manual retry actions.
+ */
+export async function processResumeTextExtraction(
+  resumeId: string,
+  recruiterId: string
+): Promise<ExtractionActionResult> {
+  try {
+    // 1. Authorize: resume must belong to a candidate owned by this recruiter
+    const resume = await prisma.resume.findFirst({
+      where: {
+        id: resumeId,
+        candidate: {
+          recruiterId,
+        },
+      },
+      select: {
+        id: true,
+        fileName: true,
+        fileUrl: true,
+        candidate: {
+          select: {
+            applications: {
+              select: { jobId: true },
+            },
+          },
+        },
+      },
+    });
+
+    if (!resume) {
+      return {
+        success: false,
+        error: "Resume record not found or access denied.",
+      };
+    }
+
+    // 2. Transition status to PROCESSING
+    await prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        processingStatus: "PROCESSING",
+        errorMessage: null,
+      },
+    });
+
+    // 3. Read stored resume file buffer
+    const buffer = await getResumeFileBuffer(resume.fileUrl);
+    if (!buffer) {
+      const err = "Stored resume file could not be read from disk.";
+      await prisma.resume.update({
+        where: { id: resumeId },
+        data: {
+          processingStatus: "FAILED",
+          errorMessage: err,
+        },
+      });
+      return { success: false, error: err };
+    }
+
+    // 4. Extract and normalize text
+    const ext = path.extname(resume.fileName).toLowerCase() as AllowedExtension;
+    const extraction = await extractTextFromBuffer(buffer, ext);
+
+    // 5. Update database with extraction result
+    if (extraction.success && extraction.text) {
+      await prisma.resume.update({
+        where: { id: resumeId },
+        data: {
+          extractedText: extraction.text,
+          processingStatus: "COMPLETED",
+          errorMessage: null,
+        },
+      });
+
+      // Revalidate affected job pages
+      resume.candidate.applications.forEach((app) => {
+        revalidatePath(`/jobs/${app.jobId}`);
+      });
+      revalidatePath("/candidates");
+
+      return {
+        success: true,
+        textLength: extraction.text.length,
+      };
+    } else {
+      const err = extraction.error || "Failed to extract text from document.";
+      await prisma.resume.update({
+        where: { id: resumeId },
+        data: {
+          extractedText: null,
+          processingStatus: "FAILED",
+          errorMessage: err,
+        },
+      });
+
+      resume.candidate.applications.forEach((app) => {
+        revalidatePath(`/jobs/${app.jobId}`);
+      });
+      revalidatePath("/candidates");
+
+      return {
+        success: false,
+        error: err,
+      };
+    }
+  } catch (error) {
+    console.error(`Error in processResumeTextExtraction for resume ${resumeId}:`, error);
+    const err = "An unexpected error occurred during resume text extraction.";
+    await prisma.resume.update({
+      where: { id: resumeId },
+      data: {
+        processingStatus: "FAILED",
+        errorMessage: err,
+      },
+    }).catch(() => null);
+
+    return {
+      success: false,
+      error: err,
+    };
+  }
+}
+
+/**
+ * Server Action: Retries or triggers text extraction for an existing resume.
+ */
+export async function extractResumeTextAction(
+  resumeId: string
+): Promise<ExtractionActionResult> {
+  try {
+    const recruiter = await requireRecruiter(false);
+    return await processResumeTextExtraction(resumeId, recruiter.id);
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return {
+        success: false,
+        error: "Authentication required to extract resume text.",
+      };
+    }
+    console.error("extractResumeTextAction error:", error);
+    return {
+      success: false,
+      error: "Unable to process text extraction. Please try again.",
+    };
+  }
+}
+
+/**
  * Server Action: Uploads one or more candidate resumes for a specific job.
  * Enforces authenticated recruiter ownership and transactional database insertion.
+ * Automatically runs the text extraction pipeline on upload.
  */
 export async function uploadResumesAction(
   jobId: string,
@@ -186,7 +347,6 @@ export async function uploadResumesAction(
               data: {
                 recruiterId: recruiter.id,
                 name: provisionalName,
-                // Email, phone, skills, experience remain null until extracted in Phase 8-9
               },
             });
 
@@ -212,12 +372,43 @@ export async function uploadResumesAction(
             return { candidate: newCandidate, resume: newResume };
           });
 
+          // 6. Execute text extraction immediately on the in-memory buffer
+          const extraction = await extractTextFromBuffer(buffer, validation.extension);
+
+          let finalStatus = "PENDING";
+          let finalExtractedLength: number | undefined;
+
+          if (extraction.success && extraction.text) {
+            finalStatus = "COMPLETED";
+            finalExtractedLength = extraction.text.length;
+            await prisma.resume.update({
+              where: { id: resume.id },
+              data: {
+                extractedText: extraction.text,
+                processingStatus: "COMPLETED",
+                errorMessage: null,
+              },
+            });
+          } else {
+            finalStatus = "FAILED";
+            await prisma.resume.update({
+              where: { id: resume.id },
+              data: {
+                extractedText: null,
+                processingStatus: "FAILED",
+                errorMessage: extraction.error || "Unable to extract text from document.",
+              },
+            });
+          }
+
           results.push({
             fileName: originalName,
             success: true,
             candidateId: candidate.id,
             candidateName: candidate.name,
             resumeId: resume.id,
+            processingStatus: finalStatus,
+            extractedTextLength: finalExtractedLength,
           });
         } catch (dbError) {
           // If database transaction failed, cleanup saved file on disk

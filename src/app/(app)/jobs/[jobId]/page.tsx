@@ -89,6 +89,8 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
           fileSize: app.candidate.resumes[0].fileSize,
           mimeType: app.candidate.resumes[0].mimeType,
           processingStatus: app.candidate.resumes[0].processingStatus,
+          extractedText: app.candidate.resumes[0].extractedText,
+          errorMessage: app.candidate.resumes[0].errorMessage,
         }
       : null,
   }));

@@ -176,9 +176,26 @@ export default async function CandidatesPage() {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          <Badge variant="neutral" size="sm">
-                            Pending Extraction
-                          </Badge>
+                          {resume?.processingStatus === "COMPLETED" && (
+                            <Badge variant="success" size="sm">
+                              Text Extracted
+                            </Badge>
+                          )}
+                          {resume?.processingStatus === "PROCESSING" && (
+                            <Badge variant="warning" size="sm">
+                              Processing
+                            </Badge>
+                          )}
+                          {resume?.processingStatus === "FAILED" && (
+                            <Badge variant="destructive" size="sm" title={resume.errorMessage || "Extraction failed"}>
+                              Extraction Failed
+                            </Badge>
+                          )}
+                          {(!resume || resume.processingStatus === "PENDING") && (
+                            <Badge variant="neutral" size="sm">
+                              Pending
+                            </Badge>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4 text-right sm:pr-6 text-slate-500 whitespace-nowrap">
