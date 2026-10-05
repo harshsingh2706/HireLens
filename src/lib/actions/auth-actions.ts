@@ -83,11 +83,25 @@ export async function registerRecruiter(formData: FormData): Promise<AuthActionR
     });
 
     return { success: true };
-  } catch (error) {
+  } catch (error: unknown) {
     console.error("Registration error:", error);
+    let errorMessage = "An unexpected error occurred while creating your account. Please try again.";
+
+    if (error && typeof error === "object" && "message" in error) {
+      const msg = String(error.message);
+      if (
+        msg.includes("Can't reach database server") ||
+        msg.includes("ECONNREFUSED") ||
+        msg.includes("PrismaClientInitializationError")
+      ) {
+        errorMessage =
+          "Database connection error: Unable to reach PostgreSQL at localhost:5432. Please ensure your PostgreSQL database service is running.";
+      }
+    }
+
     return {
       success: false,
-      error: "An unexpected error occurred while creating your account. Please try again.",
+      error: errorMessage,
     };
   }
 }
