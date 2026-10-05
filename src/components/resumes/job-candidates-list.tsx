@@ -1,19 +1,24 @@
 "use client";
 
 import React, { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
-import { CandidatesIcon, DocumentTextIcon, AlertCircleIcon } from "@/components/ui/icons";
+import { CandidatesIcon, DocumentTextIcon, AlertCircleIcon, SparklesIcon } from "@/components/ui/icons";
 import { formatDate } from "@/lib/formatters";
-import { extractResumeTextAction } from "@/lib/actions/resume-actions";
+import { extractResumeTextAction, structureCandidateResumeAction } from "@/lib/actions/resume-actions";
 
 export interface JobCandidateItem {
   id: string;
   name: string;
+  headline?: string | null;
+  experienceYears?: number | null;
+  isStructured?: boolean;
+  skillsCount?: number;
   application: {
     id: string;
     status: string;
@@ -58,6 +63,8 @@ function getApplicationBadge(status: string): { label: string; variant: BadgeVar
 export function JobCandidatesList({ candidates, jobTitle }: JobCandidatesListProps) {
   const router = useRouter();
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [structuringId, setStructuringId] = useState<string | null>(null);
+  const [structuringError, setStructuringError] = useState<{ id: string; msg: string } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // State for inspecting extracted text in a modal
@@ -74,6 +81,21 @@ export function JobCandidatesList({ candidates, jobTitle }: JobCandidatesListPro
       await extractResumeTextAction(resumeId);
       setRetryingId(null);
       router.refresh();
+    });
+  }
+
+  function handleStructureCandidate(candidateId: string) {
+    setStructuringId(candidateId);
+    setStructuringError(null);
+
+    startTransition(async () => {
+      const res = await structureCandidateResumeAction(candidateId);
+      setStructuringId(null);
+      if (!res.success) {
+        setStructuringError({ id: candidateId, msg: res.error || "Structuring failed." });
+      } else {
+        router.refresh();
+      }
     });
   }
 
@@ -127,14 +149,23 @@ export function JobCandidatesList({ candidates, jobTitle }: JobCandidatesListPro
                       key={cand.id}
                       className="hover:bg-slate-50/70 transition-colors"
                     >
-                      {/* Candidate Name / Provisional Label */}
+                      {/* Candidate Name / Profile Link */}
                       <td className="py-3.5 px-4 sm:px-6">
-                        <div className="font-semibold text-slate-900 truncate max-w-xs">
+                        <Link
+                          href={`/candidates/${cand.id}`}
+                          className="font-semibold text-slate-900 hover:text-blue-900 hover:underline truncate max-w-xs block"
+                        >
                           {cand.name}
-                        </div>
-                        <span className="text-[10px] text-slate-400">
-                          Provisional ID &bull; {cand.id.slice(0, 10)}...
-                        </span>
+                        </Link>
+                        {cand.headline ? (
+                          <span className="text-[11px] text-slate-500 truncate block max-w-xs">
+                            {cand.headline}
+                          </span>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">
+                            Provisional ID &bull; {cand.id.slice(0, 10)}...
+                          </span>
+                        )}
                       </td>
 
                       {/* Resume Document Link */}
@@ -253,16 +284,44 @@ export function JobCandidatesList({ candidates, jobTitle }: JobCandidatesListPro
                         )}
                       </td>
 
-                      {/* AI Analysis (Transparently Pending, Zero Mock Scores) */}
+                      {/* AI Structured Entities */}
                       <td className="py-3.5 px-4">
-                        <div className="space-y-0.5">
-                          <Badge variant="neutral" size="sm">
-                            Pending
-                          </Badge>
-                          <span className="text-[10px] text-slate-400 block">
-                            Phase 9 extraction
+                        {cand.isStructured ? (
+                          <div className="space-y-1">
+                            <Badge variant="success" size="sm" className="gap-1">
+                              <SparklesIcon className="w-3 h-3 text-emerald-600" />
+                              Structured
+                            </Badge>
+                            <Link
+                              href={`/candidates/${cand.id}`}
+                              className="text-[11px] text-blue-900 hover:underline font-medium block"
+                            >
+                              View profile {cand.skillsCount ? `(${cand.skillsCount} skills)` : ""}
+                            </Link>
+                          </div>
+                        ) : resume?.extractedText ? (
+                          <div className="space-y-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleStructureCandidate(cand.id)}
+                              isLoading={structuringId === cand.id && isPending}
+                              icon={<SparklesIcon className="w-3 h-3 text-amber-500" />}
+                              className="text-[11px] h-6 px-2"
+                            >
+                              Structure AI
+                            </Button>
+                            {structuringError?.id === cand.id && (
+                              <p className="text-[10px] text-red-500 max-w-[180px] leading-tight" title={structuringError.msg}>
+                                {structuringError.msg}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] text-slate-400">
+                            Awaiting text
                           </span>
-                        </div>
+                        )}
                       </td>
 
                       {/* Upload Date */}

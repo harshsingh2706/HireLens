@@ -12,6 +12,8 @@ import {
 } from "@/lib/storage";
 import { extractTextFromBuffer } from "@/lib/text-extraction";
 import { type AllowedExtension } from "@/lib/storage-constants";
+import { structureResumeText, isOpenAIConfigured } from "@/lib/ai/openai-client";
+import { persistStructuredResume } from "@/lib/ai/persist-structured-resume";
 
 export interface FileUploadResult {
   fileName: string;
@@ -36,6 +38,14 @@ export interface ExtractionActionResult {
   success: boolean;
   textLength?: number;
   error?: string;
+}
+
+export interface StructuringActionResult {
+  success: boolean;
+  candidateId?: string;
+  candidateName?: string;
+  error?: string;
+  isConfigured?: boolean;
 }
 
 /**
@@ -215,6 +225,93 @@ export async function extractResumeTextAction(
 }
 
 /**
+ * Server Action: Triggers AI structuring on an extracted candidate resume.
+ * Transforms raw text into validated structured entities and updates Candidate and Skill records.
+ */
+export async function structureCandidateResumeAction(
+  candidateId: string
+): Promise<StructuringActionResult> {
+  try {
+    const recruiter = await requireRecruiter(false);
+
+    // 1. Find candidate and verify ownership
+    const candidate = await prisma.candidate.findFirst({
+      where: {
+        id: candidateId,
+        recruiterId: recruiter.id,
+      },
+      include: {
+        resumes: {
+          orderBy: { createdAt: "desc" },
+          take: 1,
+        },
+        applications: {
+          select: { jobId: true },
+        },
+      },
+    });
+
+    if (!candidate) {
+      return {
+        success: false,
+        error: "Candidate record not found or access denied.",
+      };
+    }
+
+    const latestResume = candidate.resumes[0];
+    if (!latestResume || !latestResume.extractedText) {
+      return {
+        success: false,
+        error: "No extracted resume text found. Please extract text from document first.",
+      };
+    }
+
+    // 2. Run LLM structuring
+    const structResult = await structureResumeText(latestResume.extractedText);
+    if (!structResult.success || !structResult.data) {
+      return {
+        success: false,
+        isConfigured: structResult.isConfigured,
+        error: structResult.error || "Failed to structure resume with AI.",
+      };
+    }
+
+    // 3. Persist structured entities into PostgreSQL
+    const updated = await persistStructuredResume(
+      candidateId,
+      recruiter.id,
+      structResult.data
+    );
+
+    // 4. Revalidate cache
+    revalidatePath("/candidates");
+    revalidatePath(`/candidates/${candidateId}`);
+    candidate.applications.forEach((app) => {
+      revalidatePath(`/jobs/${app.jobId}`);
+    });
+
+    return {
+      success: true,
+      candidateId: updated.id,
+      candidateName: updated.name,
+      isConfigured: true,
+    };
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      return {
+        success: false,
+        error: "Authentication required to structure candidate resumes.",
+      };
+    }
+    console.error("structureCandidateResumeAction error:", error);
+    return {
+      success: false,
+      error: "An unexpected error occurred while structuring the resume.",
+    };
+  }
+}
+
+/**
  * Server Action: Uploads one or more candidate resumes for a specific job.
  * Enforces authenticated recruiter ownership and transactional database insertion.
  * Automatically runs the text extraction pipeline on upload.
@@ -389,6 +486,23 @@ export async function uploadResumesAction(
                 errorMessage: null,
               },
             });
+
+            // Automatically attempt AI structuring if provider is configured
+            if (isOpenAIConfigured()) {
+              try {
+                const structRes = await structureResumeText(extraction.text);
+                if (structRes.success && structRes.data) {
+                  const updatedCand = await persistStructuredResume(
+                    candidate.id,
+                    recruiter.id,
+                    structRes.data
+                  );
+                  candidate.name = updatedCand.name;
+                }
+              } catch (aiErr) {
+                console.warn("AI structuring during upload encountered error (non-fatal):", aiErr);
+              }
+            }
           } else {
             finalStatus = "FAILED";
             await prisma.resume.update({

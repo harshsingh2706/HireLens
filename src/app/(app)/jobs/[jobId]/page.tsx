@@ -58,6 +58,9 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
                 orderBy: { createdAt: "desc" },
                 take: 1,
               },
+              _count: {
+                select: { skills: true },
+              },
             },
           },
         },
@@ -77,6 +80,10 @@ export default async function JobDetailsPage({ params }: JobDetailsPageProps) {
   const candidateItems: JobCandidateItem[] = job.applications.map((app) => ({
     id: app.candidate.id,
     name: app.candidate.name,
+    headline: app.candidate.headline,
+    experienceYears: app.candidate.experienceYears,
+    isStructured: Boolean(app.candidate.structuredData),
+    skillsCount: app.candidate._count.skills,
     application: {
       id: app.id,
       status: app.status,

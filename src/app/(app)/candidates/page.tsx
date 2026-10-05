@@ -120,16 +120,26 @@ export default async function CandidatesPage() {
                     const primaryApp = cand.applications[0];
                     const resume = cand.resumes[0];
                     const appBadge = getApplicationBadge(primaryApp?.status || "NEW");
+                    const isStructured = Boolean(cand.structuredData);
 
                     return (
                       <tr key={cand.id} className="hover:bg-slate-50/70 transition-colors">
                         <td className="py-3.5 px-4 sm:px-6">
-                          <div className="font-semibold text-slate-900 truncate max-w-xs">
+                          <Link
+                            href={`/candidates/${cand.id}`}
+                            className="font-semibold text-slate-900 hover:text-blue-900 hover:underline truncate max-w-xs block"
+                          >
                             {cand.name}
-                          </div>
-                          <span className="text-[10px] text-slate-400">
-                            Provisional ID &bull; {cand.id.slice(0, 10)}...
-                          </span>
+                          </Link>
+                          {cand.headline ? (
+                            <span className="text-[11px] text-slate-500 truncate block max-w-xs">
+                              {cand.headline}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-slate-400">
+                              Provisional ID &bull; {cand.id.slice(0, 10)}...
+                            </span>
+                          )}
                         </td>
 
                         <td className="py-3.5 px-4">
@@ -176,22 +186,23 @@ export default async function CandidatesPage() {
                         </td>
 
                         <td className="py-3.5 px-4">
-                          {resume?.processingStatus === "COMPLETED" && (
+                          {isStructured ? (
                             <Badge variant="success" size="sm">
+                              AI Structured
+                            </Badge>
+                          ) : resume?.processingStatus === "COMPLETED" ? (
+                            <Badge variant="neutral" size="sm">
                               Text Extracted
                             </Badge>
-                          )}
-                          {resume?.processingStatus === "PROCESSING" && (
+                          ) : resume?.processingStatus === "PROCESSING" ? (
                             <Badge variant="warning" size="sm">
                               Processing
                             </Badge>
-                          )}
-                          {resume?.processingStatus === "FAILED" && (
+                          ) : resume?.processingStatus === "FAILED" ? (
                             <Badge variant="destructive" size="sm" title={resume.errorMessage || "Extraction failed"}>
                               Extraction Failed
                             </Badge>
-                          )}
-                          {(!resume || resume.processingStatus === "PENDING") && (
+                          ) : (
                             <Badge variant="neutral" size="sm">
                               Pending
                             </Badge>
